@@ -10,14 +10,18 @@
 #include <thread>
 #include <tuple>
 #include <vector>
+#include <mutex>
 
 using namespace std;
 
+// mutex para sincronizar salida
+mutex output_mutex;
+
 // maximo local de cada hilo
-void find_max(tuple<int*, int, int, int, int>* data) {  // Cambio 1: pasar por referencia
+void find_max(tuple<int*, int, int, int, int>* data) {
     // arr, inicio, fin, max_local, thread_id
 
-    get<3>(*data) = get<0>(*data)[get<1>(*data)];  // Cambio 2: usar * para desreferenciar
+    get<3>(*data) = get<0>(*data)[get<1>(*data)];
 
     for (int i = get<1>(*data); i <= get<2>(*data); i++) {
         if (get<0>(*data)[i] > get<3>(*data)) {
@@ -25,12 +29,14 @@ void find_max(tuple<int*, int, int, int, int>* data) {  // Cambio 1: pasar por r
         }
     }
 
-    std::cout
-    << "[HILO-" << get<4>(*data)
-    << "] procesando elementos del índice " + get<1>(*data)
-    << " al " + get<2>(*data)
-    << " - maximo local: " + get<3>(*data)
-    << endl;
+    {
+        lock_guard<mutex> lock(output_mutex);
+        cout << "[HILO-" << get<4>(*data)
+             << "] procesando elementos del indice " << get<1>(*data)
+             << " al " << get<2>(*data)
+             << " - maximo local: " << get<3>(*data)
+             << endl;
+    }
 }
 
 int main() {
@@ -46,13 +52,12 @@ int main() {
     cin >> cant_hilos;
 
     if (cant_elementos <= cant_hilos) {
-        std::cout
-        << "[PRINCIPAL] ERROR: La cantidad de elementos ("
-        << cant_elementos
-        << ") debe ser mayor que la cantidad de hilos ("
-        << cant_hilos
-        << ")"
-        << std::endl;
+        cout << "[PRINCIPAL] ERROR: La cantidad de elementos ("
+             << cant_elementos
+             << ") debe ser mayor que la cantidad de hilos ("
+             << cant_hilos
+             << ")"
+             << endl;
         return 0;
     }
 
@@ -60,7 +65,7 @@ int main() {
     random_device r;
     default_random_engine e1(r());
     uniform_int_distribution<int> uniform_dist(1, 100000);
-    int* arr = new int[cant_elementos];  // Cambio 3: usar new para array dinámico
+    int* arr = new int[cant_elementos];
 
     for (int i = 0; i < cant_elementos; i++) {
         // agregar enteros aleatorios
@@ -71,16 +76,10 @@ int main() {
     int elementos_por_hilo = cant_elementos / cant_hilos;
     int elementos_restantes = cant_elementos % cant_hilos;
 
-    cout
-    << "[PRINCIPAL] Elementos por hilo: "
-    << elementos_por_hilo
-    << endl;
+    cout << "[PRINCIPAL] Elementos por hilo: " << elementos_por_hilo << endl;
 
     if (elementos_restantes > 0) {
-        cout
-        << "[PRINCIPAL] Elementos restantes: "
-        << elementos_restantes
-        << endl;
+        cout << "[PRINCIPAL] Elementos restantes: " << elementos_restantes << endl;
     }
 
     // array para almacenar los hilos
@@ -97,36 +96,41 @@ int main() {
         get<1>(thread_data[i]) = i * elementos_por_hilo;
 
         if (i == cant_hilos - 1) {
-            // elementos restantes
-            std::get<2>(thread_data[i]) = (i + 1) * elementos_por_hilo + elementos_restantes - 1;
+            // El último hilo toma los elementos restantes
+            get<2>(thread_data[i]) = (i + 1) * elementos_por_hilo + elementos_restantes - 1;
         } else {
-            std::get<2>(thread_data[i]) = (i + 1) * elementos_por_hilo - 1;
+            get<2>(thread_data[i]) = (i + 1) * elementos_por_hilo - 1;
         }
 
-        // lanzar el hilo - Cambio 4: pasar dirección de la tupla
+        // lanzar el hilo
         hilos[i] = thread(find_max, &thread_data[i]);
     }
 
+    cout << "[PRINCIPAL] Esperando a que terminen los hilos..." << endl;
+
     // esperar a los hilos
     for (int i = 0; i < cant_hilos; i++) {
-        cout << "[PRINCIPAL] Terminando hilo " << get<4>(thread_data[i]) << endl;
         hilos[i].join();
+        cout << "[PRINCIPAL] Hilo " << get<4>(thread_data[i]) << " terminado" << endl;
     }
+
+    cout << "[PRINCIPAL] Todos los hilos han terminado" << endl;
 
     // maximos locales
     int maximo_global = get<3>(thread_data[0]);
+    cout << "\n=== RESULTADOS ===" << endl;
+
     for (int i = 0; i < cant_hilos; i++) {
-        cout
-        << "HILO-" << get<4>(thread_data[i])
-        << ": " << get<3>(thread_data[i])
-        << endl;
+        cout << "HILO-" << get<4>(thread_data[i])
+             << ": " << get<3>(thread_data[i])
+             << endl;
 
         if (get<3>(thread_data[i]) > maximo_global) {
             maximo_global = get<3>(thread_data[i]);
         }
     }
 
-    cout << "MAXIMO GLOBAL: " << maximo_global << endl;
+    cout << "\nMAXIMO GLOBAL: " << maximo_global << endl;
 
     // liberar memoria
     delete[] arr;

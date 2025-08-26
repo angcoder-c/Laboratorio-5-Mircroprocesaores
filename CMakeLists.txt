@@ -3,4 +3,5 @@ project(Laboratorio05)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(Laboratorio05 main.cpp)
+add_executable(Laboratorio05 main.cpp
+        seconnd.cpp)
